@@ -15,7 +15,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/redux/3.7.2/redux.min.js"></script>
     <script src="https://unpkg.com/react@16.3.0-alpha.1/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@16.3.0-alpha.1/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/redux-thunk@2.2.0/dist/redux-thunk.min.js"></script>
+    <script src="https://unpkg.com/redux-saga@0.16.2/dist/redux-saga.min.js"></script>
     <script src="https://unpkg.com/babel-standalone@6.15.0/babel.min.js"></script>
     <script src="https://tylermcginnis.com/goals-todos-api/index.js"></script>
 
@@ -38,7 +38,8 @@
         const ADD_TODO = 'ADD_TODO';
         const REMOVE_TODO = 'REMOVE_TODO';
         const TOGGLE_TODO = 'TOGGLE_TODO';
-        const ADD_GOAL = 'ADD_GOAL';
+        const TRY_ADD_GOAL = 'TRY_ADD_GOAL';
+        const ADDED_GOAL = 'ADDED_GOAL';
         const REMOVE_GOAL = 'REMOVE_GOAL';
         const RECEIVE_DATA = 'RECEIVE_DATA';
 
@@ -50,10 +51,10 @@
             }
         }
 
-        removeTodoAction = (id) => {
+        removeTodoAction = (todo) => {
             return {
                 type: REMOVE_TODO,
-                id
+                todo
             }
         }
 
@@ -64,17 +65,25 @@
             }
         }
 
-        addGoalAction = (goal) => {
+        tryAddGoalAction = (name, callback) => {
             return {
-                type: ADD_GOAL,
+                type: TRY_ADD_GOAL,
+                name,
+                callback
+            }
+        }
+
+        addedGoalAction = (goal) => {
+            return {
+                type: ADDED_GOAL,
                 goal
             }
         }
 
-        removeGoalAction = (id) => {
+        removeGoalAction = (goal) => {
             return {
                 type: REMOVE_GOAL,
-                id
+                goal
             }
         }
 
@@ -86,42 +95,49 @@
             }
         )
 
-        handleDeleteTodo = (todo) => {
-            return (dispatch) => {
-                //optmistic update -> dont make the user wait for the server when a user interacts -> better UX
-                dispatch(removeTodoAction(todo.id))
+        //https://github.com/redux-saga/redux-saga/issues/160
+        const todoWatchers = [
+            ReduxSaga.effects.takeEvery(REMOVE_TODO, deleteTodoWorker)
+        ]
 
-                return API.deleteTodo(todo.id)
-                    .catch(() => {
-                        dispatch(addTodoAction(todo))
-                        alert('An error occurred. Try again!')
-                    })
+        const goalWatchers = [
+            ReduxSaga.effects.takeEvery(TRY_ADD_GOAL, addGoalWorker),
+            ReduxSaga.effects.takeEvery(REMOVE_GOAL, deleteGoalWorker)
+        ]
+
+        //using the all effect
+        function* rootWatcher() {
+            yield ReduxSaga.effects.all([
+                ...todoWatchers,
+                ...goalWatchers
+            ])
+        }
+
+        function* deleteTodoWorker(action) {
+            try {
+                yield ReduxSaga.effects.call(API.deleteTodo, action.todo.id)
+            } catch (e) {
+                alert('An error occurred. Try again!')
+                yield ReduxSaga.effects.put(addTodoAction(action.todo))
             }
         }
 
-        handleAddGoal = (name, callback) => {
-            return (dispatch) => {
-                return API.saveGoal(name)
-                    .then(goal => {
-                        dispatch(addGoalAction(goal));
-                        if (typeof callback === 'function') callback()
-                    })
-                    .catch(() => {
-                        alert('There was an error. Try again!')
-                    })
+        function* addGoalWorker(action) {
+            try {               
+                const goal = yield ReduxSaga.effects.call(API.saveGoal, action.name)
+                yield ReduxSaga.effects.put(addedGoalAction(goal))
+                if (typeof action.callback === 'function') action.callback() //side effects should be here and not in the reducer
+            } catch (e) {
+                alert('There was an error. Try again!')
             }
         }
 
-        handleDeleteGoal = (goal) => {
-            return (dispatch) => {
-                //optmistic update -> dont make the user wait for the server when a user interacts -> better UX
-                dispatch(removeGoalAction(goal.id))
-
-                return API.deleteGoal(goal.id)
-                    .catch(() => {
-                        dispatch(addGoalAction(goal))
-                        alert('An error occured. Try again!')
-                    })
+        function* deleteGoalWorker(action) {
+            try {
+                yield ReduxSaga.effects.call(API.deleteGoal, action.goal.id)
+            } catch(e) {
+                alert('An error occurred. Try again!')
+                yield ReduxSaga.effects.put(addedGoalAction(action.goal))
             }
         }
 
@@ -131,7 +147,7 @@
                 case ADD_TODO:
                     return state.concat([action.todo]);
                 case REMOVE_TODO:
-                    return state.filter(todo => todo.id !== action.id);
+                    return state.filter(todo => todo.id !== action.todo.id);
                 case TOGGLE_TODO:
                     return state.map(todo => todo.id !== action.id ? todo :
                         { ...todo, complete: !todo.complete });
@@ -144,10 +160,10 @@
 
         goals = (state = [], action) => {
             switch (action.type) {
-                case ADD_GOAL:
+                case ADDED_GOAL:
                     return state.concat([action.goal]);
                 case REMOVE_GOAL:
-                    return state.filter(goal => goal.id !== action.id);
+                    return state.filter(goal => goal.id !== action.goal.id);
                 case RECEIVE_DATA:
                     return action.goals
                 default:
@@ -171,7 +187,7 @@
                 return alert(`Nope! That's a bad idea!`);
             }
 
-            if (action.type === ADD_GOAL && action.goal.name.toLowerCase().includes('bitcoin')) {
+            if (action.type === TRY_ADD_GOAL && action.name.toLowerCase().includes('bitcoin')) {
                 return alert(`Nope! That's a bad idea!`);
             }
 
@@ -184,7 +200,7 @@
                 return alert(`Nope! That's a bad idea!`);
             }
 
-            if (action.type === ADD_GOAL && action.goal.name.toLowerCase().includes('bitcoin')) {
+            if (action.type === TRY_ADD_GOAL && action.name.toLowerCase().includes('bitcoin')) {
                 return alert(`Nope! That's a bad idea!`);
             }
 
@@ -210,11 +226,15 @@
             return next(action)
         }
 
+        const sagaMiddleware = ReduxSaga.default();
+
         const store = Redux.createStore(Redux.combineReducers({
             todos,
             goals,
             loading
-        }), Redux.applyMiddleware(ReduxThunk.default/*thunk*/, checker, logger));
+        }), Redux.applyMiddleware(sagaMiddleware, thunk, checker, logger));
+
+        sagaMiddleware.run(rootWatcher)
 
     </script>
 
@@ -257,7 +277,7 @@
             removeItem = (todo) => {
                 const { dispatch } = this.props.store
 
-                dispatch(handleDeleteTodo(todo))
+                dispatch(removeTodoAction(todo))
             }
 
             toggleItem = (id) => {
@@ -299,7 +319,7 @@
 
                 const { dispatch } = this.props.store
 
-                dispatch(handleAddGoal(
+                dispatch(tryAddGoalAction(
                     this.input.value,
                     () => this.input.value = ''
                 ))
@@ -309,7 +329,7 @@
                 
                 const { dispatch } = this.props.store
                 
-                dispatch(handleDeleteGoal(goal))
+                dispatch(removeGoalAction(goal))
             }
 
             render() {
