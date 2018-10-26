@@ -295,7 +295,7 @@
                     })
             }
 
-            render() {
+            render() {                
                 return (
                     <div>
                         <h1>Todo List</h1>
@@ -310,19 +310,6 @@
                             remove={this.removeItem} 
                             toggle={this.toggleItem}/>
                     </div>
-                )
-            }
-        }
-
-        class ConnectedTodos extends React.Component {
-            render() {
-                return (
-                    <Context.Consumer>
-                    {store => {
-                        const { todos } = store.getState()
-                        return <Todos dispatch={store.dispatch} todos={todos} />
-                    }}
-                    </Context.Consumer>
                 )
             }
         }
@@ -363,37 +350,21 @@
             }
         }
 
-        class ConnectedGoals extends React.Component {
-            render() {
-                return (
-                    <Context.Consumer>
-                    {store => {
-                        const { goals } = store.getState()
-                        return <Goals dispatch={store.dispatch} goals={goals} />
-                    }}
-                    </Context.Consumer>
-                )
-            }
-        }
-
         class App extends React.Component {
 
             componentDidMount() {
-                const { store } = this.props
+                const { dispatch } = this.props
 
                 /*
                 EXERCISE: Separate UI logic from data fetching logic using redux asynchronous data flow
                 */
                 Promise.all([API.fetchTodos(), API.fetchGoals()]).then(([todos, goals]) => {                   
-                    store.dispatch(receiveDataAction(todos, goals))
+                    dispatch(receiveDataAction(todos, goals))
                 })
-
-                store.subscribe(() => this.forceUpdate())
             }
 
             render() {
-                const { store } = this.props
-                const { loading } = store.getState()
+                const { loading } = this.props
 
                 if (loading) return <h3>Loading</h3>
 
@@ -406,22 +377,66 @@
             }
         }
 
-        
+        const Context = React.createContext()
 
-        //The connected component pattern
-        class ConnectedApp extends React.Component {
-            render() {
-                return (
-                    <Context.Consumer>
-                    {(store) => {
-                        return <App store={store} />
-                    }}
-                    </Context.Consumer>
-                )
+        //Implements a connect HOC to abstract the connected component creation
+        //It avoids repetition.
+        //1. know when the store changes (subscribe)
+        //2. what state is needed (mapStateToProps)
+        //3. get the store from Context
+        const connect = (mapStateToProps) => {
+            return (Component) => {
+                class Receiver extends React.Component {
+                    
+                    //1.
+                    componentDidMount() {
+                        const { subscribe } = this.props.store
+                        this.unsubscribe = subscribe(() => {
+                            this.forceUpdate()
+                        })
+                    }
+
+                    componentWillUnmount() {
+                        this.unsubscribe()
+                    }
+
+                    render() {
+                        const { dispatch, getState } = this.props.store
+                        const state = getState()
+                        
+                        //2.
+                        const stateNeeded = mapStateToProps(state)                       
+
+                        return <Component {...stateNeeded} dispatch={dispatch} />
+                    }
+                }
+
+                class ConnectedComponent extends React.Component {
+                    render() {
+                        return (
+                            //3.
+                            <Context.Consumer>
+                                {(store) => <Receiver store={store} />}
+                            </Context.Consumer>
+                        )
+                    }
+                }
+
+                return ConnectedComponent
             }
         }
 
-        const Context = React.createContext()
+        const ConnectedTodos = connect(state => ({
+            todos: state.todos
+        }))(Todos)
+        
+        const ConnectedGoals = connect(state => ({
+            goals: state.goals
+        }))(Goals)
+        
+        const ConnectedApp = connect(state => ({
+            loading: state.loading
+        }))(App)
 
         class Provider extends React.Component {
             render() {
