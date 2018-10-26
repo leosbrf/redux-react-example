@@ -123,7 +123,7 @@
         }
 
         function* addGoalWorker(action) {
-            try {               
+            try {
                 const goal = yield ReduxSaga.effects.call(API.saveGoal, action.name)
                 yield ReduxSaga.effects.put(addedGoalAction(goal))
                 if (typeof action.callback === 'function') action.callback() //side effects should be here and not in the reducer
@@ -135,7 +135,7 @@
         function* deleteGoalWorker(action) {
             try {
                 yield ReduxSaga.effects.call(API.deleteGoal, action.goal.id)
-            } catch(e) {
+            } catch (e) {
                 alert('An error occurred. Try again!')
                 yield ReduxSaga.effects.put(addedGoalAction(action.goal))
             }
@@ -228,11 +228,13 @@
 
         const sagaMiddleware = ReduxSaga.default();
 
+        //The applyMiddleware order matters. Validations (i.e: the checker middleware) should run first
+        //and trigger next() only if validation passed.
         const store = Redux.createStore(Redux.combineReducers({
             todos,
             goals,
             loading
-        }), Redux.applyMiddleware(sagaMiddleware, thunk, checker, logger));
+        }), Redux.applyMiddleware(checker, sagaMiddleware, thunk, logger));
 
         sagaMiddleware.run(rootWatcher)
 
@@ -312,6 +314,19 @@
             }
         }
 
+        class ConnectedTodos extends React.Component {
+            render() {
+                const { todos } = this.props
+                return (
+                    <Context.Consumer>
+                    {store => {
+                        return <Todos store={store} todos={todos} />
+                    }}
+                    </Context.Consumer>
+                )
+            }
+        }
+
         class Goals extends React.Component {
 
             addItem = (e) => {
@@ -348,6 +363,19 @@
             }
         }
 
+        class ConnectedGoals extends React.Component {
+            render() {
+                const { goals } = this.props
+                return (
+                    <Context.Consumer>
+                    {store => {
+                        return <Goals store={store} goals={goals} />
+                    }}
+                    </Context.Consumer>
+                )
+            }
+        }
+
         class App extends React.Component {
 
             componentDidMount() {
@@ -371,14 +399,45 @@
 
                 return (
                     <div>
-                        <Todos todos={todos} store={this.props.store}/>
-                        <Goals goals={goals} store={this.props.store} />
+                        <ConnectedTodos todos={todos} />
+                        <ConnectedGoals goals={goals} />
                     </div>
                 )
             }
         }
 
-        ReactDOM.render(<App store={store}/>, document.getElementById('app'))
+        
+
+        //The connected component pattern
+        class ConnectedApp extends React.Component {
+            render() {
+                return (
+                    <Context.Consumer>
+                    {(store) => {
+                        return <App store={store} />
+                    }}
+                    </Context.Consumer>
+                )
+            }
+        }
+
+        const Context = React.createContext()
+
+        class Provider extends React.Component {
+            render() {
+                return (
+                    <Context.Provider value={this.props.store}>
+                        {this.props.children}
+                    </Context.Provider>
+                )
+            }
+        }
+
+        ReactDOM.render(
+            <Provider store={store}>
+                <ConnectedApp />
+            </Provider>
+            , document.getElementById('app'))
     </script>
 </body>
 
