@@ -16,6 +16,7 @@
     <script src="https://unpkg.com/react@16.3.0-alpha.1/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@16.3.0-alpha.1/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/redux-saga@0.16.2/dist/redux-saga.min.js"></script>
+    <script src="https://unpkg.com/react-redux@5.0.6/dist/react-redux.min.js"></script>
     <script src="https://unpkg.com/babel-standalone@6.15.0/babel.min.js"></script>
     <script src="https://tylermcginnis.com/goals-todos-api/index.js"></script>
 
@@ -377,81 +378,32 @@
             }
         }
 
-        const Context = React.createContext()
-
-        //Implements a connect HOC to abstract the connected component creation
-        //It avoids repetition.
-        //1. know when the store changes (subscribe)
-        //2. what state is needed (mapStateToProps)
-        //3. get the store from Context
-        const connect = (mapStateToProps) => {
-            return (Component) => {
-                class Receiver extends React.Component {
-                    
-                    //1.
-                    componentDidMount() {
-                        const { subscribe } = this.props.store
-                        this.unsubscribe = subscribe(() => {
-                            this.forceUpdate()
-                        })
-                    }
-
-                    componentWillUnmount() {
-                        this.unsubscribe()
-                    }
-
-                    render() {
-                        const { dispatch, getState } = this.props.store
-                        const state = getState()
-                        
-                        //2.
-                        const stateNeeded = mapStateToProps(state)                       
-
-                        return <Component {...stateNeeded} dispatch={dispatch} />
-                    }
-                }
-
-                class ConnectedComponent extends React.Component {
-                    render() {
-                        return (
-                            //3.
-                            <Context.Consumer>
-                                {(store) => <Receiver store={store} />}
-                            </Context.Consumer>
-                        )
-                    }
-                }
-
-                return ConnectedComponent
-            }
-        }
-
-        const ConnectedTodos = connect(state => ({
+        const ConnectedTodos = ReactRedux.connect(state => ({
             todos: state.todos
         }))(Todos)
         
-        const ConnectedGoals = connect(state => ({
+        const ConnectedGoals = ReactRedux.connect(state => ({
             goals: state.goals
         }))(Goals)
         
-        const ConnectedApp = connect(state => ({
+        const ConnectedApp = ReactRedux.connect(state => ({
             loading: state.loading
         }))(App)
 
         class Provider extends React.Component {
             render() {
                 return (
-                    <Context.Provider value={this.props.store}>
+                    <React.Provider value={this.props.store}>
                         {this.props.children}
-                    </Context.Provider>
+                    </React.Provider>
                 )
             }
         }
 
         ReactDOM.render(
-            <Provider store={store}>
+            <ReactRedux.Provider store={store}>
                 <ConnectedApp />
-            </Provider>
+            </ReactRedux.Provider>
             , document.getElementById('app'))
     </script>
 </body>
