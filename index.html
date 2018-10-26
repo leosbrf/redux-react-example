@@ -390,16 +390,6 @@
             loading: state.loading
         }))(App)
 
-        class Provider extends React.Component {
-            render() {
-                return (
-                    <React.Provider value={this.props.store}>
-                        {this.props.children}
-                    </React.Provider>
-                )
-            }
-        }
-
         ReactDOM.render(
             <ReactRedux.Provider store={store}>
                 <ConnectedApp />
